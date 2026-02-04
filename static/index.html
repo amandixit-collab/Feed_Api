@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Run Feed Script</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 24px; }
+      label { display:block; margin-top:8px }
+      input, textarea { width:100%; padding:8px; margin-top:4px }
+      button { margin-top:12px; padding:8px 12px }
+      pre { background:#f6f8fa; padding:12px }
+    </style>
+  </head>
+  <body>
+    <h1>Trigger Feed Analysis</h1>
+
+    <form id="jobForm">
+      <label>Partner ID
+        <input name="partner_id" required />
+      </label>
+
+      <label>S3 Feed File
+        <input name="s3_feed_file" placeholder="s3://bucket/path/feed.xml.gz" required />
+      </label>
+
+      <label>S3 Output Path
+        <input name="s3_output_path" placeholder="s3://bucket/path/output" required />
+      </label>
+
+      <label>Distinguish ID
+        <input name="distinguish_id" required />
+      </label>
+
+      <label>Callback URL (optional)
+        <input name="callback_url" placeholder="http://your-callback-host/api/callback/feed" />
+      </label>
+
+      <label>EC2 Host (optional)
+        <input name="ec2_host" placeholder="ec2-1-2-3-4.compute-1.amazonaws.com" />
+      </label>
+
+      <label>EC2 User (optional)
+        <input name="ec2_user" placeholder="ec2-user" />
+      </label>
+
+      <label>Job ID (optional)
+        <input name="job_id" type="number" />
+      </label>
+
+      <label>Type
+        <input name="type" value="feed_generation" />
+      </label>
+
+      <button type="submit">Start Job</button>
+    </form>
+
+    <h2>Response</h2>
+    <pre id="out">Not started</pre>
+
+    <script>
+      const form = document.getElementById('jobForm');
+      const out = document.getElementById('out');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(form).entries());
+        // convert job_id to number when present
+        if (data.job_id) data.job_id = Number(data.job_id);
+
+        out.textContent = 'Sending...';
+
+        try {
+          const res = await fetch('/api/run-feed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          const json = await res.json();
+          out.textContent = JSON.stringify({ status: res.status, body: json }, null, 2);
+        } catch (err) {
+          out.textContent = 'Error: ' + err.message;
+        }
+      });
+    </script>
+  </body>
+</html>
