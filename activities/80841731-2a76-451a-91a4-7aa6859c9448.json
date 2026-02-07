@@ -1,0 +1,17 @@
+{
+  "id": "80841731-2a76-451a-91a4-7aa6859c9448",
+  "entity": "feed_generation_job",
+  "entity_id": "c9cdeecb-d0b3-474e-b244-81efa891a358",
+  "source": "callback",
+  "requested_by": "system",
+  "activity": {
+    "callback_type": "feed_validation",
+    "status": "failed",
+    "result": {
+      "destination_s3_path": ""
+    },
+    "err": "Command failed (127): bash /Users/amandixit/Desktop/voilet_analyisis_api/Feed_API/scripts/analyze_feed.sh 456 s3://test-bucket/feed2.csv s3://test-bucket/result2.json c9cdeecb-d0b3-474e-b244-81efa891a358_validation\n",
+    "callback_received_at": "2026-02-07T10:03:12.058995"
+  },
+  "created_at": "2026-02-07T10:03:12.059027"
+}

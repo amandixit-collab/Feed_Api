@@ -1,0 +1,26 @@
+{
+  "id": "eaacfc05-4c47-46df-abfc-93a0762cce8f",
+  "entity": "feed_generation_job",
+  "entity_id": "61f56ec8-cac0-4d64-aa18-a96a48b1002f",
+  "source": "ui",
+  "requested_by": "system",
+  "activity": {
+    "request_path": "/api/feed/validate",
+    "request_body": {
+      "job_id": "test-job-123",
+      "source_s3_path": "s3://test-bucket/feed.csv",
+      "destination_s3_path": "s3://test-bucket/result.json",
+      "callback_url": "http://localhost:3000/api/callback/feed",
+      "affiliate_merchant_id": "TEST_MERCHANT_123",
+      "partner_id": 456
+    },
+    "response": {
+      "err": "",
+      "result": {
+        "job_id": "61f56ec8-cac0-4d64-aa18-a96a48b1002f"
+      }
+    },
+    "action": "validation_trigger"
+  },
+  "created_at": "2026-02-07T09:49:31.856045"
+}

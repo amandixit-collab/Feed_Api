@@ -1,0 +1,25 @@
+{
+  "id": "3cd8d212-6084-43e7-b667-cc8806822596",
+  "entity": "feed_generation_job",
+  "entity_id": "45d1a90a-6a23-4c82-956c-e2d2df506fca",
+  "source": "ui",
+  "requested_by": "system",
+  "activity": {
+    "request_path": "/api/feed/generate",
+    "request_body": {
+      "job_id": 1,
+      "affiliate_merchant_id": "TEST_MERCHANT_123",
+      "source_s3_path": "s3://test-bucket/input/feed.csv",
+      "destination_s3_path": "s3://test-bucket/output/feed.csv",
+      "callback_url": "http://localhost:3000/api/callback/feed"
+    },
+    "response": {
+      "err": "",
+      "result": {
+        "job_id": "45d1a90a-6a23-4c82-956c-e2d2df506fca"
+      }
+    },
+    "action": "retry"
+  },
+  "created_at": "2026-02-07T09:23:00.549626"
+}

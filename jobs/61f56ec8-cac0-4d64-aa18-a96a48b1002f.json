@@ -1,0 +1,24 @@
+{
+  "id": "61f56ec8-cac0-4d64-aa18-a96a48b1002f",
+  "affiliate_merchant_id": "TEST_MERCHANT_123",
+  "partner_id": "456",
+  "type": "violet_feed_generation",
+  "status": "validation_failed",
+  "retry_count": 0,
+  "job_data": {
+    "validation_source_s3_path": "s3://test-bucket/feed.csv",
+    "validation_destination_s3_path": "s3://test-bucket/result.json",
+    "validation_callback_url": "http://localhost:3000/api/callback/feed",
+    "failure": {
+      "validation_failed": [
+        {
+          "code": "VALIDATION_ERROR",
+          "message": "Command failed (127): bash /Users/amandixit/Desktop/voilet_analyisis_api/Feed_API/scripts/analyze_feed.sh 456 s3://test-bucket/feed.csv s3://test-bucket/result.json 61f56ec8-cac0-4d64-aa18-a96a48b1002f_validation\n",
+          "timestamp": "2026-02-07T09:49:31.905318"
+        }
+      ]
+    }
+  },
+  "created_at": "2026-02-07T09:49:31.855336",
+  "updated_at": "2026-02-07T09:49:31.906550"
+}
