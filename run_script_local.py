@@ -65,8 +65,8 @@ def parse_log_for_upload(log_content, job_id):
     success_pattern = r"Script finished successfully at:"
     
     if re.search(success_pattern, log_content):
-        # Also look for upload completion to get S3 path
-        upload_pattern = r"Upload completed: (s3://[^\s]+)"
+        # Look for S3 upload pattern (matches both "Upload completed:" and "upload: ... to s3://")
+        upload_pattern = r"(?:Upload completed:|upload:.*?to)\s+(s3://[^\s]+)"
         upload_match = re.search(upload_pattern, log_content)
         if upload_match:
             return upload_match.group(1)
