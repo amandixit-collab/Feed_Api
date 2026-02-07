@@ -41,7 +41,22 @@ def trigger_feed_validation():
     missing = [k for k in required_fields if k not in data or not data.get(k)]
     
     if missing:
-        return jsonify({'error': f'Missing fields: {missing}'}), 400
+        return jsonify({
+            "statusCode": 400,
+            "msg": null,
+            "err": f'Missing fields: {missing}',
+            "result": {}
+        }), 400
+    
+    # Validate S3 path format
+    for field in ['source_s3_path', 'destination_s3_path']:
+        if not data[field].startswith('s3://'):
+            return jsonify({
+                "statusCode": 400,
+                "msg": null,
+                "err": f'{field} must start with s3://',
+                "result": {}
+            }), 400
     
     # Check if job exists (for retry scenarios)
     existing_job = job_manager.get_job(data['job_id'])
@@ -52,7 +67,12 @@ def trigger_feed_validation():
             max_retry_count = int(os.getenv('MAX_RETRY_COUNT', 3))
             
             if existing_job['retry_count'] >= max_retry_count:
-                return jsonify({'error': f'Max retry count ({max_retry_count}) exceeded'}), 400
+                return jsonify({
+                    "statusCode": 400,
+                    "msg": null,
+                    "err": f'Max retry count ({max_retry_count}) exceeded',
+                    "result": {}
+                }), 400
             
             retry_count = existing_job['retry_count'] + 1
             
@@ -91,9 +111,19 @@ def trigger_feed_validation():
             time.sleep(retry_delay_ms / 1000)  # Convert to seconds
             execute_validation_script(existing_job['id'], data['callback_url'])
             
-            return jsonify({'message': 'Validation job retry accepted', 'job_id': existing_job['id']}), 200
+            return jsonify({
+                "statusCode": 200,
+                "msg": "Feed Validation retry started successfully!!",
+                "err": "",
+                "result": {"job_id": existing_job['id'], "destinationS3Path": ""}
+            }), 200
         else:
-            return jsonify({'error': f'Job cannot be retried in current status: {existing_job["status"]}'}), 400
+            return jsonify({
+                "statusCode": 400,
+                "msg": null,
+                "err": f'Job cannot be retried in current status: {existing_job["status"]}',
+                "result": {}
+            }), 400
     else:
         # Create new validation job
         job_data = {
@@ -126,14 +156,24 @@ def trigger_feed_validation():
         # Execute validation script in background
         execute_validation_script(job_id, data['callback_url'])
         
-        return jsonify({'message': 'Validation job accepted', 'job_id': job_id}), 200
+        return jsonify({
+                "statusCode": 200,
+                "msg": "Feed Validation started successfully!!",
+                "err": "",
+                "result": {"job_id": job_id, "destinationS3Path": ""}
+            }), 200
 
 @app.route('/api/feed/status/<job_id>', methods=['GET'])
 def get_job_status(job_id):
     """GET status endpoint"""
     job = job_manager.get_job(job_id)
     if not job:
-        return jsonify({'error': 'Job not found'}), 404
+        return jsonify({
+            "statusCode": 404,
+            "msg": null,
+            "err": 'Job not found',
+            "result": {}
+        }), 404
     
     return jsonify(job), 200
 
@@ -206,7 +246,12 @@ def callback_receiver():
     missing = [k for k in required_fields if k not in payload]
     if missing:
         app.logger.error('Callback missing required fields: %s', missing)
-        return jsonify({'error': f'Missing fields: {missing}'}), 400
+        return jsonify({
+            "statusCode": 400,
+            "msg": null,
+            "err": f'Missing fields: {missing}',
+            "result": {}
+        }), 400
     
     job_id = payload['job_id']
     callback_type = payload['type']
@@ -218,7 +263,12 @@ def callback_receiver():
     job = job_manager.get_job(job_id)
     if not job:
         app.logger.error('Job not found for callback: %s', job_id)
-        return jsonify({'error': 'Job not found'}), 404
+        return jsonify({
+            "statusCode": 404,
+            "msg": null,
+            "err": 'Job not found',
+            "result": {}
+        }), 404
     
     # Create activity entry (source = callback)
     job_manager.create_activity(
@@ -267,7 +317,12 @@ def callback_receiver():
     })
     
     app.logger.info('Callback processed successfully for job %s', job_id)
-    return jsonify({'received': True})
+    return jsonify({
+        "statusCode": 200,
+        "msg": "Callback received successfully",
+        "err": "",
+        "result": {"received": True}
+    })
 
 
 if __name__ == '__main__':

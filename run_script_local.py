@@ -121,7 +121,7 @@ def execute_locally(opts):
         # Find the log file for this job
         log_files = []
         for filename in os.listdir(logs_dir):
-            if distinguish_id in filename and filename.endswith('.log'):
+            if f"partner_{partner_id}_" in filename and filename.endswith('.log'):
                 log_files.append(os.path.join(logs_dir, filename))
         
         if not log_files:
