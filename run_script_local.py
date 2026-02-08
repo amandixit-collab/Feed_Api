@@ -5,6 +5,7 @@ import subprocess
 import requests
 import logging
 import time
+import json
 from datetime import datetime, timedelta
 try:
     from dotenv import load_dotenv
@@ -17,6 +18,23 @@ except Exception:
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+# Callback logging setup
+CALLBACK_LOGS_DIR = os.path.join(os.getcwd(), 'callback_logs')
+os.makedirs(CALLBACK_LOGS_DIR, exist_ok=True)
+
+def write_callback_log(log_entry):
+    """Write callback log entry to file"""
+    try:
+        log_filename = f"callback_{log_entry['job_id']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        log_filepath = os.path.join(CALLBACK_LOGS_DIR, log_filename)
+        
+        with open(log_filepath, 'w') as f:
+            json.dump(log_entry, f, indent=2)
+        
+        logger.info('📝 Callback log written to: %s', log_filepath)
+    except Exception as e:
+        logger.error('Failed to write callback log: %s', e)
 
 
 def run_cmd(cmd, timeout=None):
@@ -49,13 +67,85 @@ def send_callback(callback_url, job_id, type_, status, destination_s3_path, err_
         'err': err_msg or ''
     }
 
+    # Create callback log entry
+    callback_log = {
+        'timestamp': datetime.now().isoformat(),
+        'job_id': job_id,
+        'callback_url': callback_url,
+        'status': 'sending',
+        'payload': payload
+    }
+    
+    # Log callback attempt
+    logger.info('🚀 CALLBACK SENDING: %s', callback_log)
+    write_callback_log(callback_log)
+    
     try:
         response = requests.post(callback_url, json=payload, timeout=30)
         response.raise_for_status()
-        logger.info('Callback sent successfully to %s', callback_url)
+        
+        # Log success
+        success_log = {
+            'timestamp': datetime.now().isoformat(),
+            'job_id': job_id,
+            'callback_url': callback_url,
+            'status': 'success',
+            'response_status': response.status_code,
+            'response_body': response.text[:500]  # Limit response size
+        }
+        logger.info('✅ CALLBACK SUCCESS: %s', success_log)
+        write_callback_log(success_log)
+        
         return response.json()
+    except requests.exceptions.Timeout as e:
+        # Log timeout
+        timeout_log = {
+            'timestamp': datetime.now().isoformat(),
+            'job_id': job_id,
+            'callback_url': callback_url,
+            'status': 'timeout',
+            'error': str(e)
+        }
+        logger.error('⏰ CALLBACK TIMEOUT: %s', timeout_log)
+        write_callback_log(timeout_log)
+        raise
+    except requests.exceptions.ConnectionError as e:
+        # Log connection error
+        conn_error_log = {
+            'timestamp': datetime.now().isoformat(),
+            'job_id': job_id,
+            'callback_url': callback_url,
+            'status': 'connection_error',
+            'error': str(e)
+        }
+        logger.error('🔌 CALLBACK CONNECTION ERROR: %s', conn_error_log)
+        write_callback_log(conn_error_log)
+        raise
+    except requests.exceptions.HTTPError as e:
+        # Log HTTP error
+        http_error_log = {
+            'timestamp': datetime.now().isoformat(),
+            'job_id': job_id,
+            'callback_url': callback_url,
+            'status': 'http_error',
+            'error': str(e),
+            'response_status': e.response.status_code if e.response else None,
+            'response_body': e.response.text[:500] if e.response else None
+        }
+        logger.error('🌐 CALLBACK HTTP ERROR: %s', http_error_log)
+        write_callback_log(http_error_log)
+        raise
     except Exception as e:
-        logger.error('Failed to send callback: %s', e)
+        # Log general error
+        error_log = {
+            'timestamp': datetime.now().isoformat(),
+            'job_id': job_id,
+            'callback_url': callback_url,
+            'status': 'error',
+            'error': str(e)
+        }
+        logger.error('❌ CALLBACK ERROR: %s', error_log)
+        write_callback_log(error_log)
         raise
 
 

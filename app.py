@@ -109,13 +109,17 @@ def trigger_feed_validation():
             # Execute validation script in background with delay
             retry_delay_ms = int(os.getenv('RETRY_DELAY_MS', 300))
             time.sleep(retry_delay_ms / 1000)  # Convert to seconds
-            execute_validation_script(existing_job['id'], data['callback_url'])
+            execute_validation_script(existing_job['id'], f"{data['callback_url']}?webhook={existing_job['id']}")
             
             return jsonify({
                 "statusCode": 200,
                 "msg": "Feed Validation retry started successfully!!",
                 "err": "",
-                "result": {"job_id": existing_job['id'], "destinationS3Path": ""}
+                "result": {
+                    "job_id": existing_job['id'], 
+                    "destinationS3Path": data['destination_s3_path'],
+                    "callbackUrl": f"{data['callback_url']}?webhook={existing_job['id']}"
+                }
             }), 200
         else:
             return jsonify({
@@ -154,13 +158,17 @@ def trigger_feed_validation():
         )
         
         # Execute validation script in background
-        execute_validation_script(job_id, data['callback_url'])
+        execute_validation_script(job_id, f"{data['callback_url']}?webhook={job_id}")
         
         return jsonify({
                 "statusCode": 200,
                 "msg": "Feed Validation started successfully!!",
                 "err": "",
-                "result": {"job_id": job_id, "destinationS3Path": ""}
+                "result": {
+                    "job_id": job_id, 
+                    "destinationS3Path": data['destination_s3_path'],
+                    "callbackUrl": f"{data['callback_url']}?webhook={job_id}"
+                }
             }), 200
 
 @app.route('/api/feed/status/<job_id>', methods=['GET'])
