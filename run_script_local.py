@@ -59,8 +59,9 @@ def send_callback(callback_url, job_id, type_, status, destination_s3_path, err_
 
     payload = {
         'job_id': job_id or 0,
-        'type': type_ or 'feed_generation',
+        'type': type_ or 'feed_validation',
         'status': status,
+        'response_status': 200,
         'result': {
             'destination_s3_path': destination_s3_path or ''
         },

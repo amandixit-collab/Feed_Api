@@ -13,8 +13,10 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# Initialize file-based job manager
+# Initialize job manager and job ID mapping
 job_manager = FileBasedJobManager()
+job_id_mapping = {}  # frontend_job_id -> backend_job_id
+reverse_job_id_mapping = {}  # backend_job_id -> frontend_job_id
 
 # Status enums (as strings)
 class JobStatus:
@@ -37,29 +39,41 @@ def trigger_feed_validation():
     """API: Trigger Validation - Creates new job or retries failed job"""
     data = request.get_json(force=True)
     
+    # Extract frontend job_id
+    frontend_job_id = data.get('job_id')
+    
     required_fields = ['job_id', 'source_s3_path', 'destination_s3_path', 'callback_url', 'affiliate_merchant_id']
     missing = [k for k in required_fields if k not in data or not data.get(k)]
     
     if missing:
         return jsonify({
-            "statusCode": 400,
-            "msg": null,
-            "err": f'Missing fields: {missing}',
-            "result": {}
+            "job_id": 0,
+            "type": "feed_validation",
+            "status": "failed",
+            "response_status": 400,
+            "result": {
+                "destination_s3_path": ""
+            },
+            "err": f'Missing fields: {missing}'
         }), 400
     
     # Validate S3 path format
     for field in ['source_s3_path', 'destination_s3_path']:
         if not data[field].startswith('s3://'):
             return jsonify({
-                "statusCode": 400,
-                "msg": null,
-                "err": f'{field} must start with s3://',
-                "result": {}
+                "job_id": 0,
+                "type": "feed_validation",
+                "status": "failed",
+                "response_status": 400,
+                "result": {
+                    "destination_s3_path": ""
+                },
+                "err": f'{field} must start with s3://'
             }), 400
     
-    # Check if job exists (for retry scenarios)
-    existing_job = job_manager.get_job(data['job_id'])
+    # Check if frontend job_id already exists (for retry scenarios)
+    backend_job_id = job_id_mapping.get(frontend_job_id)
+    existing_job = job_manager.get_job(backend_job_id) if backend_job_id else None
     
     if existing_job:
         # Handle retry logic
@@ -68,10 +82,14 @@ def trigger_feed_validation():
             
             if existing_job['retry_count'] >= max_retry_count:
                 return jsonify({
-                    "statusCode": 400,
-                    "msg": null,
-                    "err": f'Max retry count ({max_retry_count}) exceeded',
-                    "result": {}
+                    "job_id": 0,
+                    "type": "feed_validation",
+                    "status": "failed",
+                    "response_status": 400,
+                    "result": {
+                        "destination_s3_path": ""
+                    },
+                    "err": f'Max retry count ({max_retry_count}) exceeded'
                 }), 400
             
             retry_count = existing_job['retry_count'] + 1
@@ -112,21 +130,25 @@ def trigger_feed_validation():
             execute_validation_script(existing_job['id'], f"{data['callback_url']}?webhook={existing_job['id']}")
             
             return jsonify({
-                "statusCode": 200,
-                "msg": "Feed Validation retry started successfully!!",
-                "err": "",
+                "job_id": frontend_job_id,
+                "type": "feed_validation",
+                "status": "success",
+                "response_status": 200,
                 "result": {
-                    "job_id": existing_job['id'], 
-                    "destinationS3Path": data['destination_s3_path'],
-                    "callbackUrl": f"{data['callback_url']}?webhook={existing_job['id']}"
-                }
+                    "destination_s3_path": data['destination_s3_path']
+                },
+                "err": ""
             }), 200
         else:
             return jsonify({
-                "statusCode": 400,
-                "msg": null,
-                "err": f'Job cannot be retried in current status: {existing_job["status"]}',
-                "result": {}
+                "job_id": 0,
+                "type": "feed_validation",
+                "status": "failed",
+                "response_status": 400,
+                "result": {
+                    "destination_s3_path": ""
+                },
+                "err": f'Job cannot be retried in current status: {existing_job["status"]}'
             }), 400
     else:
         # Create new validation job
@@ -137,53 +159,68 @@ def trigger_feed_validation():
             'failure': {}
         }
         
-        job_id = job_manager.create_job(
+        # Create backend job with UUID
+        backend_job_id = job_manager.create_job(
             affiliate_merchant_id=data['affiliate_merchant_id'],
             partner_id=str(data.get('partner_id', '')),
             job_data=job_data
         )
         
-        # Create activity for validation trigger
+        # Map frontend job_id to backend job_id
+        job_id_mapping[frontend_job_id] = backend_job_id
+        reverse_job_id_mapping[backend_job_id] = frontend_job_id
+        
         job_manager.create_activity(
             entity='feed_generation_job',
-            entity_id=job_id,
+            entity_id=backend_job_id,
             source=ActivitySource.UI,
             requested_by=data.get('requested_by', 'system'),
             activity_data={
                 'request_path': '/api/feed/validate',
                 'request_body': data,
-                'response': {'err': '', 'result': {'job_id': job_id}},
+                'response': {'err': '', 'result': {'job_id': frontend_job_id}},
                 'action': 'validation_trigger'
             }
         )
         
         # Execute validation script in background
-        execute_validation_script(job_id, f"{data['callback_url']}?webhook={job_id}")
+        execute_validation_script(backend_job_id, f"{data['callback_url']}?webhook={backend_job_id}")
         
         return jsonify({
-                "statusCode": 200,
-                "msg": "Feed Validation started successfully!!",
-                "err": "",
+                "job_id": frontend_job_id,
+                "type": "feed_validation",
+                "status": "success",
+                "response_status": 200,
                 "result": {
-                    "job_id": job_id, 
-                    "destinationS3Path": data['destination_s3_path'],
-                    "callbackUrl": f"{data['callback_url']}?webhook={job_id}"
-                }
+                    "destination_s3_path": data['destination_s3_path']
+                },
+                "err": ""
             }), 200
 
 @app.route('/api/feed/status/<job_id>', methods=['GET'])
 def get_job_status(job_id):
     """GET status endpoint"""
-    job = job_manager.get_job(job_id)
+    # Check if job_id is frontend job_id, map to backend job_id
+    backend_job_id = job_id_mapping.get(job_id, job_id)
+    
+    job = job_manager.get_job(backend_job_id)
     if not job:
         return jsonify({
-            "statusCode": 404,
-            "msg": null,
-            "err": 'Job not found',
-            "result": {}
+            "job_id": 0,
+            "type": "feed_validation",
+            "status": "failed",
+            "response_status": 404,
+            "result": {
+                "destination_s3_path": ""
+            },
+            "err": 'Job not found'
         }), 404
     
-    return jsonify(job), 200
+    # Return job status with frontend job_id
+    job_response = job.copy()
+    job_response['id'] = job_id  # Return frontend job_id instead of backend UUID
+    
+    return jsonify(job_response), 200
 
 
 
@@ -255,10 +292,14 @@ def callback_receiver():
     if missing:
         app.logger.error('Callback missing required fields: %s', missing)
         return jsonify({
-            "statusCode": 400,
-            "msg": null,
-            "err": f'Missing fields: {missing}',
-            "result": {}
+            "job_id": 0,
+            "type": "feed_validation",
+            "status": "failed",
+            "response_status": 400,
+            "result": {
+                "destination_s3_path": ""
+            },
+            "err": f'Missing fields: {missing}'
         }), 400
     
     job_id = payload['job_id']
@@ -272,11 +313,18 @@ def callback_receiver():
     if not job:
         app.logger.error('Job not found for callback: %s', job_id)
         return jsonify({
-            "statusCode": 404,
-            "msg": null,
-            "err": 'Job not found',
-            "result": {}
+            "job_id": 0,
+            "type": "feed_validation",
+            "status": "failed",
+            "response_status": 404,
+            "result": {
+                "destination_s3_path": ""
+            },
+            "err": 'Job not found'
         }), 404
+    
+    # Get frontend job_id for response
+    frontend_job_id = reverse_job_id_mapping.get(job_id, job_id)
     
     # Create activity entry (source = callback)
     job_manager.create_activity(
@@ -326,10 +374,14 @@ def callback_receiver():
     
     app.logger.info('Callback processed successfully for job %s', job_id)
     return jsonify({
-        "statusCode": 200,
-        "msg": "Callback received successfully",
-        "err": "",
-        "result": {"received": True}
+        "job_id": frontend_job_id,
+        "type": "feed_validation",
+        "status": "success",
+        "response_status": 200,
+        "result": {
+            "destination_s3_path": result.get('destination_s3_path', '')
+        },
+        "err": ""
     })
 
 

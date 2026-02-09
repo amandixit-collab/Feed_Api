@@ -128,10 +128,10 @@ validation_failed
 
 ## Key Features
 
-### Validation Job Creation:
-- Creates new validation job for each request
-- No retry logic - always fresh job
-- Immediate script execution
+### Retry Logic:
+- Same endpoint handles both new jobs and retries
+- Automatic retry count increment
+- Preserves failure history
 
 ### Background Execution:
 - All scripts run in daemon threads
