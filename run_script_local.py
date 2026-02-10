@@ -37,6 +37,47 @@ def write_callback_log(log_entry):
         logger.error('Failed to write callback log: %s', e)
 
 
+def write_callback_result_to_logs(job_id, status, payload, callback_url):
+    """Write callback result to main logs folder for testing"""
+    try:
+        logs_dir = os.getenv('LOGS_DIR', './logs')
+        os.makedirs(logs_dir, exist_ok=True)
+        
+        callback_result = {
+            'timestamp': datetime.now().isoformat(),
+            'job_id': job_id,
+            'callback_status': status,
+            'callback_url': callback_url,
+            'payload': payload,
+            'note': 'This is a test log for callback functionality'
+        }
+        
+        # Create filename with job_id and timestamp
+        log_filename = f"callback_result_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        log_filepath = os.path.join(logs_dir, log_filename)
+        
+        with open(log_filepath, 'w') as f:
+            json.dump(callback_result, f, indent=2)
+        
+        logger.info('📋 Callback result written to logs folder: %s', log_filepath)
+        
+        # Also write a simple status file for easy checking
+        status_filename = f"callback_status_{job_id}.txt"
+        status_filepath = os.path.join(logs_dir, status_filename)
+        
+        with open(status_filepath, 'w') as f:
+            f.write(f"Job ID: {job_id}\n")
+            f.write(f"Status: {status}\n")
+            f.write(f"Callback URL: {callback_url}\n")
+            f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+            f.write(f"Payload: {json.dumps(payload, indent=2)}\n")
+        
+        logger.info('📄 Callback status file written: %s', status_filepath)
+        
+    except Exception as e:
+        logger.error('Failed to write callback result to logs: %s', e)
+
+
 def run_cmd(cmd, timeout=None):
     """Run command locally without SSH"""
     logger.info('Running locally: %s', cmd)
@@ -53,9 +94,14 @@ def run_cmd(cmd, timeout=None):
 
 def send_callback(callback_url, job_id, type_, status, destination_s3_path, err_msg):
     """Send callback to the specified URL"""
+    # Build callback URL from environment variables if callback_url is not provided
     if not callback_url:
-        logger.warning('No callback URL configured; skipping callback')
-        return
+        callback_resource = os.getenv('CALLBACK_RESOURCE', 'http://localhost:3000')
+        callback_endpoint = os.getenv('CALLBACK_ENDPOINT', '/api/callback/feed')
+        callback_url = f"{callback_resource}{callback_endpoint}"
+        logger.info('Using callback URL from environment: %s', callback_url)
+    else:
+        logger.warning('Using provided callback URL: %s', callback_url)
 
     payload = {
         'job_id': job_id or 0,
@@ -81,6 +127,9 @@ def send_callback(callback_url, job_id, type_, status, destination_s3_path, err_
     logger.info('🚀 CALLBACK SENDING: %s', callback_log)
     write_callback_log(callback_log)
     
+    # Write callback result to logs folder for testing
+    write_callback_result_to_logs(job_id, 'sending', payload, callback_url)
+    
     try:
         response = requests.post(callback_url, json=payload, timeout=30)
         response.raise_for_status()
@@ -96,6 +145,7 @@ def send_callback(callback_url, job_id, type_, status, destination_s3_path, err_
         }
         logger.info('✅ CALLBACK SUCCESS: %s', success_log)
         write_callback_log(success_log)
+        write_callback_result_to_logs(job_id, 'success', payload, callback_url)
         
         return response.json()
     except requests.exceptions.Timeout as e:
@@ -109,6 +159,7 @@ def send_callback(callback_url, job_id, type_, status, destination_s3_path, err_
         }
         logger.error('⏰ CALLBACK TIMEOUT: %s', timeout_log)
         write_callback_log(timeout_log)
+        write_callback_result_to_logs(job_id, 'timeout', payload, callback_url)
         raise
     except requests.exceptions.ConnectionError as e:
         # Log connection error
@@ -121,6 +172,7 @@ def send_callback(callback_url, job_id, type_, status, destination_s3_path, err_
         }
         logger.error('🔌 CALLBACK CONNECTION ERROR: %s', conn_error_log)
         write_callback_log(conn_error_log)
+        write_callback_result_to_logs(job_id, 'connection_error', payload, callback_url)
         raise
     except requests.exceptions.HTTPError as e:
         # Log HTTP error
@@ -135,6 +187,7 @@ def send_callback(callback_url, job_id, type_, status, destination_s3_path, err_
         }
         logger.error('🌐 CALLBACK HTTP ERROR: %s', http_error_log)
         write_callback_log(http_error_log)
+        write_callback_result_to_logs(job_id, 'http_error', payload, callback_url)
         raise
     except Exception as e:
         # Log general error
@@ -147,6 +200,7 @@ def send_callback(callback_url, job_id, type_, status, destination_s3_path, err_
         }
         logger.error('❌ CALLBACK ERROR: %s', error_log)
         write_callback_log(error_log)
+        write_callback_result_to_logs(job_id, 'error', payload, callback_url)
         raise
 
 

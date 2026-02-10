@@ -42,7 +42,7 @@ def trigger_feed_validation():
     # Extract frontend job_id
     frontend_job_id = data.get('job_id')
     
-    required_fields = ['job_id', 'source_s3_path', 'destination_s3_path', 'callback_url', 'affiliate_merchant_id']
+    required_fields = ['job_id', 'source_s3_path', 'destination_s3_path', 'affiliate_merchant_id']
     missing = [k for k in required_fields if k not in data or not data.get(k)]
     
     if missing:
@@ -98,8 +98,7 @@ def trigger_feed_validation():
             job_data = existing_job['job_data'] or {}
             job_data.update({
                 'validation_source_s3_path': data['source_s3_path'],
-                'validation_destination_s3_path': data['destination_s3_path'],
-                'validation_callback_url': data['callback_url']
+                'validation_destination_s3_path': data['destination_s3_path']
             })
             
             # Update job
@@ -127,7 +126,7 @@ def trigger_feed_validation():
             # Execute validation script in background with delay
             retry_delay_ms = int(os.getenv('RETRY_DELAY_MS', 300))
             time.sleep(retry_delay_ms / 1000)  # Convert to seconds
-            execute_validation_script(existing_job['id'], f"{data['callback_url']}?webhook={existing_job['id']}")
+            execute_validation_script(existing_job['id'])
             
             return jsonify({
                 "job_id": frontend_job_id,
@@ -155,7 +154,6 @@ def trigger_feed_validation():
         job_data = {
             'validation_source_s3_path': data['source_s3_path'],
             'validation_destination_s3_path': data['destination_s3_path'],
-            'validation_callback_url': data['callback_url'],
             'failure': {}
         }
         
@@ -184,7 +182,7 @@ def trigger_feed_validation():
         )
         
         # Execute validation script in background
-        execute_validation_script(backend_job_id, f"{data['callback_url']}?webhook={backend_job_id}")
+        execute_validation_script(backend_job_id)
         
         return jsonify({
                 "job_id": frontend_job_id,
@@ -196,6 +194,29 @@ def trigger_feed_validation():
                 },
                 "err": ""
             }), 200
+
+
+
+@app.route('/api/jobs', methods=['GET'])
+def list_all_jobs():
+    """List all jobs for debugging"""
+    try:
+        jobs = job_manager.list_all_jobs()
+        return jsonify({
+            'jobs': jobs,
+            'total': len(jobs)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/mappings', methods=['GET'])
+def show_mappings():
+    """Temporary endpoint to show job ID mappings"""
+    return jsonify({
+        'frontend_to_backend': job_id_mapping,
+        'backend_to_frontend': reverse_job_id_mapping,
+        'total_mappings': len(job_id_mapping)
+    })
 
 @app.route('/api/feed/status/<job_id>', methods=['GET'])
 def get_job_status(job_id):
@@ -224,7 +245,7 @@ def get_job_status(job_id):
 
 
 
-def execute_validation_script(job_id, callback_url):
+def execute_validation_script(job_id):
     """Execute validation script in background (local execution)"""
     def background():
         try:
@@ -246,7 +267,7 @@ def execute_validation_script(job_id, callback_url):
                 's3_feed_file': job_data.get('validation_source_s3_path'),
                 's3_output_path': job_data.get('validation_destination_s3_path'),
                 'distinguish_id': f"{job_id}_validation",
-                'callback_url': callback_url,
+                'callback_url': None,  # Will be built from environment in run_script_local.py
                 'job_id': job_id,
                 'type': 'feed_validation',
                 'log_timeout': os.getenv('LOG_CHECK_TIMEOUT', '300'),
@@ -278,111 +299,6 @@ def execute_validation_script(job_id, callback_url):
     
     thread = threading.Thread(target=background, daemon=True)
     thread.start()
-
-
-@app.route('/api/callback/feed', methods=['POST'])
-def callback_receiver():
-    """Callback Contract - Handles validation callbacks only"""
-    payload = request.get_json(force=True)
-    app.logger.info('Received callback: %s', payload)
-    
-    # Validate required fields
-    required_fields = ['job_id', 'type', 'status']
-    missing = [k for k in required_fields if k not in payload]
-    if missing:
-        app.logger.error('Callback missing required fields: %s', missing)
-        return jsonify({
-            "job_id": 0,
-            "type": "feed_validation",
-            "status": "failed",
-            "response_status": 400,
-            "result": {
-                "destination_s3_path": ""
-            },
-            "err": f'Missing fields: {missing}'
-        }), 400
-    
-    job_id = payload['job_id']
-    callback_type = payload['type']
-    status = payload['status']
-    result = payload.get('result', {})
-    err_msg = payload.get('err', '')
-    
-    # Find job
-    job = job_manager.get_job(job_id)
-    if not job:
-        app.logger.error('Job not found for callback: %s', job_id)
-        return jsonify({
-            "job_id": 0,
-            "type": "feed_validation",
-            "status": "failed",
-            "response_status": 404,
-            "result": {
-                "destination_s3_path": ""
-            },
-            "err": 'Job not found'
-        }), 404
-    
-    # Get frontend job_id for response
-    frontend_job_id = reverse_job_id_mapping.get(job_id, job_id)
-    
-    # Create activity entry (source = callback)
-    job_manager.create_activity(
-        entity='feed_generation_job',
-        entity_id=job['id'],
-        source=ActivitySource.CALLBACK,
-        requested_by='system',
-        activity_data={
-            'callback_type': callback_type,
-            'status': status,
-            'result': result,
-            'err': err_msg,
-            'callback_received_at': datetime.utcnow().isoformat()
-        }
-    )
-    
-    # Update job status based on callback type and status
-    job_data = job['job_data'] or {}
-    
-    if callback_type == 'feed_validation':
-        if status == 'success':
-            new_status = JobStatus.VALIDATED
-            # Update destination_s3_path in job_data if provided
-            if result and 'destination_s3_path' in result:
-                job_data['validation_destination_s3_path'] = result['destination_s3_path']
-        elif status == 'failed':
-            new_status = JobStatus.VALIDATION_FAILED
-            # Update failure data
-            if 'failure' not in job_data:
-                job_data['failure'] = {}
-            if 'validation_failed' not in job_data['failure']:
-                job_data['failure']['validation_failed'] = []
-            
-            if err_msg:
-                job_data['failure']['validation_failed'].append({
-                    'code': 'VALIDATION_ERROR',
-                    'message': err_msg,
-                    'timestamp': datetime.utcnow().isoformat()
-                })
-    
-    job_manager.update_job(job_id, {
-        'status': new_status,
-        'retry_count': 0,
-        'job_data': job_data,
-        'updated_at': datetime.utcnow().isoformat()
-    })
-    
-    app.logger.info('Callback processed successfully for job %s', job_id)
-    return jsonify({
-        "job_id": frontend_job_id,
-        "type": "feed_validation",
-        "status": "success",
-        "response_status": 200,
-        "result": {
-            "destination_s3_path": result.get('destination_s3_path', '')
-        },
-        "err": ""
-    })
 
 
 if __name__ == '__main__':

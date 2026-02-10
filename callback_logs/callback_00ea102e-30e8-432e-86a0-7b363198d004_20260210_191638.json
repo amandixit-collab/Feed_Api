@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-02-10T19:16:38.593947",
+  "job_id": "00ea102e-30e8-432e-86a0-7b363198d004",
+  "callback_url": "http://localhost:3000/api/callback/feed",
+  "status": "http_error",
+  "error": "404 Client Error: NOT FOUND for url: http://localhost:3000/api/callback/feed",
+  "response_status": null,
+  "response_body": null
+}

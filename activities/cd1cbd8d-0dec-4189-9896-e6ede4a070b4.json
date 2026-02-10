@@ -1,0 +1,25 @@
+{
+  "id": "cd1cbd8d-0dec-4189-9896-e6ede4a070b4",
+  "entity": "feed_generation_job",
+  "entity_id": "00ea102e-30e8-432e-86a0-7b363198d004",
+  "source": "ui",
+  "requested_by": "system",
+  "activity": {
+    "request_path": "/api/feed/validate",
+    "request_body": {
+      "job_id": 1,
+      "affiliate_merchant_id": "TEST_MERCHANT_123",
+      "source_s3_path": "s3://test-bucket/feed.csv",
+      "destination_s3_path": "s3://test-bucket/result.json",
+      "partner_id": 456
+    },
+    "response": {
+      "err": "",
+      "result": {
+        "job_id": 1
+      }
+    },
+    "action": "validation_trigger"
+  },
+  "created_at": "2026-02-10T13:46:38.566424"
+}

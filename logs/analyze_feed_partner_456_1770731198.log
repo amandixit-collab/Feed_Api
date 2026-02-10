@@ -1,0 +1,12 @@
+======================================
+Script started at: Tue Feb 10 19:16:38 IST 2026
+Command: /Users/amandixit/Desktop/voilet_analyisis_api/Feed_API/scripts/analyze_feed.sh 456 s3://test-bucket/feed.csv s3://test-bucket/result.json 00ea102e-30e8-432e-86a0-7b363198d004_validation
+Log file: ./logs/analyze_feed_partner_456_1770731198.log
+======================================
+Partner ID: 456
+Input feed: s3://test-bucket/feed.csv
+Output path: s3://test-bucket/result.json
+Distinguish ID: 00ea102e-30e8-432e-86a0-7b363198d004_validation
+--------------------------------------
+⬇️ Downloading feed from S3...
+/Users/amandixit/Desktop/voilet_analyisis_api/Feed_API/scripts/analyze_feed.sh: line 53: aws: command not found
