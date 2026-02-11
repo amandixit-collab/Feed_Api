@@ -34,7 +34,7 @@ def health():
 
 
 
-@app.route('/api/feed/validate', methods=['POST'])
+@app.route('/editorialist-tools/catalog/vendoronboarding/feed/validate', methods=['POST'])
 def trigger_feed_validation():
     """API: Trigger Validation - Creates new job or retries failed job"""
     data = request.get_json(force=True)
@@ -218,7 +218,7 @@ def show_mappings():
         'total_mappings': len(job_id_mapping)
     })
 
-@app.route('/api/feed/status/<job_id>', methods=['GET'])
+@app.route('/editorialist-tools/catalog/vendoronboarding/feed/validate/status/<job_id>', methods=['GET'])
 def get_job_status(job_id):
     """GET status endpoint"""
     # Check if job_id is frontend job_id, map to backend job_id
@@ -237,9 +237,18 @@ def get_job_status(job_id):
             "err": 'Job not found'
         }), 404
     
-    # Return job status with frontend job_id
-    job_response = job.copy()
-    job_response['id'] = job_id  # Return frontend job_id instead of backend UUID
+    # Return job status with frontend job_id in new format
+    job_response = {
+        "job_id": job_id,  # Frontend job_id
+        "type": "feed_validation",
+        "status": "success" if job['status'] == JobStatus.VALIDATED else "failed",
+        "response_status": 200,
+        "result": {
+            "destination_s3_path": job['job_data'].get('validation_destination_s3_path', '')
+        },
+        "msg": "",
+        "err": ""
+    }
     
     return jsonify(job_response), 200
 
@@ -279,7 +288,18 @@ def execute_validation_script(job_id):
             
             # Update job status based on result
             if result and isinstance(result, dict) and result.get('destination'):
-                # Script succeeded, callback will update status
+                # Script succeeded, update status to validated and update destination path
+                job_data = job['job_data'] or {}
+                # Use actual filename from script output
+                script_output_path = result.get('destination')
+                job_data.update({
+                    'validation_destination_s3_path': script_output_path
+                })
+                job_manager.update_job(job_id, {
+                    'status': JobStatus.VALIDATED,
+                    'job_data': job_data,
+                    'updated_at': datetime.utcnow().isoformat()
+                })
                 app.logger.info('Validation script completed successfully for job %s', job_id)
             else:
                 # Script failed, update status immediately

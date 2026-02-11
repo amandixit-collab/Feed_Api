@@ -279,7 +279,7 @@ def execute_locally(opts):
                 f.write(f"Input file: {s3_feed_file}\n")
                 f.write(f"Output path: {s3_output_path}\n")
                 f.write("Script finished successfully\n")
-                f.write(f"Upload completed: {s3_output_path}/feed_{partner_id}_{distinguish_id}.csv\n")
+                f.write(f"_Upload completed: {s3_output_path}/feed_{partner_id}_{distinguish_id}.csv\n")
             log_files = [log_file]
         
         # Get the most recent log file
